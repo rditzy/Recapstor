@@ -1,4 +1,5 @@
-# resistor_color_code_decoder.py
+import argparse
+
 COLOR_VALUES = { 
     'black': 0,
     'brown': 1,
@@ -25,6 +26,8 @@ MULTIPLIERS = {
     'grey': 100000000,
     'gray': 100000000,  #Alternative spelling
     'white':1000000000,
+    'gold': 0.1,
+    'silver': 0.01
 }
 
 TOLERANCES = {
@@ -38,24 +41,28 @@ TOLERANCES = {
 }
 
 def decode_resistor(colors):
-    # Get the first two digits
-    first_digit = COLOR_VALUES[colors[0]]
-    second_digit = COLOR_VALUES[colors[1]]
-
-    # Combine them into a two-digit number
-    base_value = (first_digit * 10) + second_digit
-
-    # Get the multiplier from the third color
-    multiplier = MULTIPLIERS[colors[2]]
-
-    # Calculate final resistance
-    resistance = base_value * multiplier
-    # Check if there's a 4th band for tolerance value
-    if len(colors) == 4:
-        tolerance = TOLERANCES[colors[3]]
-        return resistance, tolerance
-    else:
-        return resistance, None
+if len(colors) == 3 or len(colors) == 4:
+        # 3 or 4 bands: 2 significant digits
+        first_digit = COLOR_VALUES[colors[0]]
+        second_digit = COLOR_VALUES[colors[1]]
+        base_value = (first_digit * 10) + second_digit
+        multiplier = MULTIPLIERS[colors[2]]
+        
+        resistance = base_value * multiplier
+        tolerance = TOLERANCES[colors[3]] if len(colors) == 4 else None
+        
+    elif len(colors) == 5:
+        # 5 bands: 3 significant digits
+        first_digit = COLOR_VALUES[colors[0]]
+        second_digit = COLOR_VALUES[colors[1]]
+        third_digit = COLOR_VALUES[colors[2]]
+        base_value = (first_digit * 100) + (second_digit * 10) + third_digit
+        multiplier = MULTIPLIERS[colors[3]]
+        
+        resistance = base_value * multiplier
+        tolerance = TOLERANCES[colors[4]]
+        
+    return resistance, tolerance
 
 def format_resistance(ohms):
     if ohms >= 1000000:           # If >= 1 million, use Megaohms
@@ -69,31 +76,50 @@ def format_resistance(ohms):
 
 def main():
     # Test case 1: Red, Red, Orange, Gold = 22kΩ ±5%
-    colors1 = ['red', 'red', 'orange', 'gold']
-    resistance1, tolerance1 = decode_resistor(colors1)
-    formatted1 = format_resistance(resistance1)
-    print(f"Colors: {colors1} → {formatted1} {tolerance1}")
+    parser = argparse.ArgumentParser(
+        description="Decode 3, 4, or 5-band resistor color codes into resistance values.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
     
-    # Test case 2: Brown, Black, Red, Brown = 1kΩ ±1%
-    colors2 = ['brown', 'black', 'red', 'brown']
-    resistance2, tolerance2 = decode_resistor(colors2)
-    formatted2 = format_resistance(resistance2)
-    print(f"Colors: {colors2} → {formatted2} {tolerance2}")
-    
-    # Test case 3: Green, Blue, Yellow, Silver = 560kΩ ±10%
-    colors3 = ['green', 'blue', 'yellow', 'silver']
-    resistance3, tolerance3 = decode_resistor(colors3)
-    formatted3 = format_resistance(resistance3)
-    print(f"Colors: {colors3} → {formatted3} {tolerance3}")
-    
-    # Test case 4: Without tolerance band (3 colors)
-    colors4 = ['red', 'red', 'orange']
-    resistance4, tolerance4 = decode_resistor(colors4)
-    formatted4 = format_resistance(resistance4)
-    if tolerance4:
-        print(f"Colors: {colors4} → {formatted4} {tolerance4}")
-    else:
-        print(f"Colors: {colors4} → {formatted4}")
+    parser.add_argument(
+        'colors', 
+        metavar='COLOR', 
+        type=str, 
+        nargs='+',
+        help="The colors of the resistor bands from left to right.\nExample: red red orange gold"
+    )
+
+    args = parser.parse_args()
+
+    # Normalize inputs to lowercase
+    input_colors = [color.lower() for color in args.colors]
+
+    if len(input_colors) not in [3, 4, 5]:
+        print("❌ Error: Please provide exactly 3, 4, or 5 colors.")
+        return
+
+    try:
+        resistance, tolerance = decode_resistor(input_colors)
+        formatted_res = format_resistance(resistance)
+        
+        print("\n--- Resistor Details ---")
+        print(f"Bands:  {'-'.join(input_colors).title()}")
+        
+        if tolerance:
+            print(f"Value:  {formatted_res} ±{tolerance}%")
+            
+            # Calculate the range
+            variance = resistance * (tolerance / 100)
+            min_res = format_resistance(resistance - variance)
+            max_res = format_resistance(resistance + variance)
+            print(f"Range:  {min_res} to {max_res}")
+        else:
+            print(f"Value:  {formatted_res} (No tolerance band)")
+        print("------------------------\n")
+            
+    except KeyError as e:
+        print(f"\n❌ Error: Unknown color {e}. Please check your spelling and use standard colors.\n")
+
 
 #Run
 if __name__ == "__main__":
